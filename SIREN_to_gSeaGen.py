@@ -1,8 +1,10 @@
-import siren
-from siren.SIREN_Controller import SIREN_Controller
+#import siren
+#from siren.SIREN_Controller import SIREN_Controller
 import uproot
 import awkward as ak
 import numpy as np
+import argparse
+import os
 
 c = 3e-1 # m / ns
 
@@ -141,3 +143,20 @@ class SIREN_to_gSeaGen:
                                "NSysWgt_ParName":dummy_val,
                                "WSys_ParName":dummy_val
                               }
+
+def main(siren_filename,root_filename):
+    siren_file = ak.from_parquet(siren_filename)
+    converter = SIREN_to_gSeaGen(siren_file)
+    with uproot.recreate(root_filename+".root") as root_file:
+        converter.output(root_file)
+    return
+        
+if __name__ == '__main__':
+    
+    parser = argparse.ArgumentParser(description='Define SIREN and KM3NeT paths')
+    parser.add_argument('-s','--SIREN', type=str, required=True,
+                        help='the path to SIREN input file')
+    parser.add_argument('-k','--KM3NeT', type=str, required=True,
+                        help='path to KM3NeT output file')
+    args = parser.parse_args()
+    main(siren_filename=args.SIREN, root_filename=args.KM3NeT)
