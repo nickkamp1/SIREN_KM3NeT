@@ -14,10 +14,38 @@ crd = rundec.CRunDec()
 mu = 2.32e-3
 md = 4.71e-3
 ms = 92.9e-3
+mc = 1.280
+mb = 4.198
+mt = 173.3
+quark_masses = {"u":mu,
+                "d":md,
+                "s":ms,
+                "c":mc,
+                "b":mb,
+                "t":mt}
+V = {("u","d"):Constants.Vud,
+     ("u","s"):Constants.Vus,
+     ("u","b"):Constants.Vub,
+     ("c","d"):Constants.Vcd,
+     ("c","s"):Constants.Vcs,
+     ("c","b"):Constants.Vcb,
+     ("t","d"):Constants.Vtd,
+     ("t","s"):Constants.Vts,
+     ("t","b"):Constants.Vtb}
+
+# lepton masses
 me = 0.511e-3
 mmu = 105.6e-3
 mtau = 1.776
-mK = 0.493677
+
+# meson masses
+# for the NC case
+threshold_meson_mass = {"u":Constants.PiPlusMass,
+                        "d":Constants.PiPlusMass,
+                        "s":Constants.KPlusMass,
+                        "c":Constants.DPlusMass,
+                        "b":5,#Constants.BPlusMass,
+                        "t":mt}
 
 def lam(a,b,c):
     return a**2 + b**2 + c**2 - 2*a*b - 2*a*c - 2*b*c
@@ -60,10 +88,10 @@ def GammaNC(U,mN,mf,Nz=1,fs="qup"):
     return prefactor * (C1f*factor1 + 4*C2f*factor2)
 
 def DeltaQCD(m_N,
-             nl=5,
+             nl=1,
              flavor_thresholds= np.array([1.5,4.8,173.21])):
     
-    nf = int(3 + sum(m_N>flavor_thresholds))
+    nf = 3#int(3 + sum(m_N>flavor_thresholds))
     if nf<=4:
         # use tau mass for reference
         m_ref = 1.7768
@@ -78,15 +106,27 @@ def DeltaQCD(m_N,
     return alpha_s / np.pi + 5.2 * alpha_s**2 / np.pi**2 + 26.4 * alpha_s**3 / np.pi**3
 
 def GammaHadronsCC(m_N,m_l):
-    Gamma_ud = GammaCC(1,m_N,mu,md,m_l,Nw=3*Constants.Vud)
-    Gamma_us = GammaCC(1,m_N,mu,ms,m_l,Nw=3*Constants.Vus)
-    return (1+DeltaQCD(m_N)) * (Gamma_ud + np.sqrt(1 - 4*(mK/m_N)**2) * Gamma_us)
+    Gamma_qq = 0
+    for qu in ["u","c","t"]:
+        for qd in ["d","s","b"]:
+            
+            Gamma_qq += GammaCC(1,m_N,
+                                quark_masses[qu],
+                                quark_masses[qd],
+                                m_l,
+                                Nw = 3*V[(qu,qd)])
+    return Gamma_qq
 
 def GammaHadronsNC(m_N):
-    Gamma_uu = GammaNC(1,m_N,mu,Nz=3,fs="qup")
-    Gamma_dd = GammaNC(1,m_N,md,Nz=3,fs="qdown")
-    Gamma_ss = GammaNC(1,m_N,ms,Nz=3,fs="qdown")
-    return (1+DeltaQCD(m_N)) * (Gamma_uu + Gamma_dd + np.sqrt(1 - 4*(mK/m_N)**2) * Gamma_ss)
+    Gamma_qq = 0
+    for q,mq in quark_masses.items():
+        if q in ["u","c","t"]: fs = "qup"
+        elif q in ["d","s","b"]: fs = "qdown"
+        else: return -1
+        x = 1-4*(threshold_meson_mass[q]/m_N)
+        if x<=0: continue
+        Gamma_qq += np.sqrt(x) *  GammaNC(1,m_N,mq,Nz=3,fs=fs)
+    return Gamma_qq
 
 
 
@@ -106,7 +146,7 @@ def get_decay_widths(m4, Ue4, Umu4, Utau4):
         "Utau4": Utau4,
         "gD":0,
         "epsilon":0,
-        "mzprime":10,
+        "mzprime":1,
         "noHC": True,
         "HNLtype": "dirac",
         "include_nelastic": True,
@@ -138,7 +178,7 @@ def get_decay_widths(m4, Ue4, Umu4, Utau4):
             decay_widths[tuple(signature.secondary_types)] = decay.TotalDecayWidthForFinalState(record)
     
     # 3 Body hadronic decay width
-    if m4 > 1:
+    if m4 > 1.0:
         GammaHadron_2Body_NC = 0
         GammaHadron_2Body_CC = {siren.dataclasses.Particle.EMinus:0,
                                 siren.dataclasses.Particle.MuMinus:0,
@@ -153,13 +193,27 @@ def get_decay_widths(m4, Ue4, Umu4, Utau4):
                                 siren.dataclasses.Particle.NuTau]:
                 GammaHadron_2Body_NC += decay_width
         decay_widths[tuple([siren.dataclasses.Particle.NuLight,
-                            siren.dataclasses.Particle.Hadrons])] = (Ue4**2 + Umu4**2 + Utau4**2) * GammaHadronsNC(m4) - GammaHadron_2Body_NC
+                            siren.dataclasses.Particle.Hadrons])] = (1+DeltaQCD(m4)) * ((Ue4**2 + Umu4**2 + Utau4**2) * GammaHadronsNC(m4) - GammaHadron_2Body_NC)
         for charged_lepton,ml,U in zip(GammaHadron_2Body_CC.keys(),
                                        [me,mmu,mtau],
                                        [Ue4,Umu4,Utau4]):
             if U<=0: continue
             decay_widths[tuple([charged_lepton,
-                                siren.dataclasses.Particle.Hadrons])] = U**2 * GammaHadronsCC(m4,ml) - GammaHadron_2Body_CC[charged_lepton]
-    decay_widths["total"] = sum(decay_widths.values())
+                                siren.dataclasses.Particle.Hadrons])] = (1+DeltaQCD(m4)) * (U**2 * GammaHadronsCC(m4,ml) - GammaHadron_2Body_CC[charged_lepton])
+            # decay_widths[tuple([charged_lepton,
+            #                     siren.dataclasses.Particle.Qball])] = U**2 * GammaHadronsCC(m4,ml)
+            # for d in [m4,
+            #           1+DeltaQCD(m4),
+            #           U**2*GammaHadronsCC(m4,ml),
+            #           GammaHadron_2Body_CC[charged_lepton],
+            #           (1+DeltaQCD(m4)) * U**2 * GammaHadronsCC(m4,ml) - GammaHadron_2Body_CC[charged_lepton],
+            #           (1+DeltaQCD(m4)) * (U**2 * GammaHadronsCC(m4,ml) - GammaHadron_2Body_CC[charged_lepton])]:
+            #     print("%2.2e"%d,end=", ")
+            # print()
+    total_decay_width = 0
+    for k,v in decay_widths.items():
+        if siren.dataclasses.Particle.Qball not in k:
+            total_decay_width += v
+    decay_widths["total"] = total_decay_width
     
     return decay_widths
