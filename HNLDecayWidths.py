@@ -84,7 +84,7 @@ def GammaNC(U,mN,mf,Nz=1,fs="qup"):
     if (2*x>=1): return 0
     prefactor = Nz * Constants.FermiConstant**2 * mN**5 / (192*Constants.pi**3) * U**2
     factor1 = (1 - 14 * x**2 - 2 * x**4 - 12 * x**6)*np.sqrt(1 - 4 * x**2) + 12 * x**4 * (x**4 - 1) * L(x)
-    factor2 = x**2 * (2 + 10 * x*82 - 12 * x**4) * np.sqrt(1 - 4 * x**2) + 6 * x**4 * (1 - 2 * x**2 + 2 * x**4) * L(x)
+    factor2 = x**2 * (2 + 10 * x**2 - 12 * x**4) * np.sqrt(1 - 4 * x**2) + 6 * x**4 * (1 - 2 * x**2 + 2 * x**4) * L(x)
     return prefactor * (C1f*factor1 + 4*C2f*factor2)
 
 def DeltaQCD(m_N,
@@ -123,7 +123,7 @@ def GammaHadronsNC(m_N):
         if q in ["u","c","t"]: fs = "qup"
         elif q in ["d","s","b"]: fs = "qdown"
         else: return -1
-        x = 1-4*(threshold_meson_mass[q]/m_N)
+        x = 1-4*(threshold_meson_mass[q]/m_N)**2
         if x<=0: continue
         Gamma_qq += np.sqrt(x) *  GammaNC(1,m_N,mq,Nz=3,fs=fs)
     return Gamma_qq
@@ -152,13 +152,13 @@ def get_decay_widths(m4, Ue4, Umu4, Utau4):
         "include_nelastic": True,
         "nuclear_targets": ["H1"]
     }
-    if m4 > 2*0.1057:
+    if m4 > 2*0.1057 and m4 < Constants.wMass:
         model_kwargs["decay_product"] = "mu+mu-"
         DN_processes = PyDarkNewsInteractionCollection(table_dir = table_dir, **model_kwargs)
         dimuon_decay = DN_processes.decays[0]
     else:
         dimuon_decay = None
-    if m4 > 2*0.000511:
+    if m4 > 2*0.000511 and m4 < Constants.wMass:
         model_kwargs["decay_product"] = "e+e-"
         DN_processes = PyDarkNewsInteractionCollection(table_dir = table_dir, **model_kwargs)
         dielectron_decay = DN_processes.decays[0]
@@ -177,39 +177,6 @@ def get_decay_widths(m4, Ue4, Umu4, Utau4):
             record.signature.secondary_types = signature.secondary_types
             decay_widths[tuple(signature.secondary_types)] = decay.TotalDecayWidthForFinalState(record)
     
-    # 3 Body hadronic decay width
-    if m4 > 1.0:
-        GammaHadron_2Body_NC = 0
-        GammaHadron_2Body_CC = {siren.dataclasses.Particle.EMinus:0,
-                                siren.dataclasses.Particle.MuMinus:0,
-                                siren.dataclasses.Particle.TauMinus:0}
-        for sec_types,decay_width in decay_widths.items():
-            if len(sec_types) != 2: continue
-            for charged_lepton in GammaHadron_2Body_CC.keys():  
-                if sec_types[0] == charged_lepton:
-                    GammaHadron_2Body_CC[charged_lepton] += decay_width
-            if sec_types[0] in [siren.dataclasses.Particle.NuE,
-                                siren.dataclasses.Particle.NuMu,
-                                siren.dataclasses.Particle.NuTau]:
-                GammaHadron_2Body_NC += decay_width
-        decay_widths[tuple([siren.dataclasses.Particle.NuLight,
-                            siren.dataclasses.Particle.Hadrons])] = (1+DeltaQCD(m4)) * ((Ue4**2 + Umu4**2 + Utau4**2) * GammaHadronsNC(m4) - GammaHadron_2Body_NC)
-        for charged_lepton,ml,U in zip(GammaHadron_2Body_CC.keys(),
-                                       [me,mmu,mtau],
-                                       [Ue4,Umu4,Utau4]):
-            if U<=0: continue
-            decay_widths[tuple([charged_lepton,
-                                siren.dataclasses.Particle.Hadrons])] = (1+DeltaQCD(m4)) * (U**2 * GammaHadronsCC(m4,ml) - GammaHadron_2Body_CC[charged_lepton])
-            # decay_widths[tuple([charged_lepton,
-            #                     siren.dataclasses.Particle.Qball])] = U**2 * GammaHadronsCC(m4,ml)
-            # for d in [m4,
-            #           1+DeltaQCD(m4),
-            #           U**2*GammaHadronsCC(m4,ml),
-            #           GammaHadron_2Body_CC[charged_lepton],
-            #           (1+DeltaQCD(m4)) * U**2 * GammaHadronsCC(m4,ml) - GammaHadron_2Body_CC[charged_lepton],
-            #           (1+DeltaQCD(m4)) * (U**2 * GammaHadronsCC(m4,ml) - GammaHadron_2Body_CC[charged_lepton])]:
-            #     print("%2.2e"%d,end=", ")
-            # print()
     total_decay_width = 0
     for k,v in decay_widths.items():
         if siren.dataclasses.Particle.Qball not in k:
