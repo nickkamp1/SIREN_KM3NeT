@@ -68,9 +68,9 @@ def L(x,thresh=3e-3):
     num = np.where(x<thresh,2*x**6 + 6*x**8 + 18*x**10,num)
     denom = x**2 * (1 + np.sqrt(1 - 4 * x**2))
     return np.log(num/denom)
-    
+
 def GammaNC(U,mN,mf,Nz=1,fs="qup"):
-        
+
     if fs=="qup":
         C1f = 1./4. * (1 - 8./3. * Constants.thetaWeinberg + 32./9. * Constants.thetaWeinberg**2)
         C2f = 1./3. * Constants.thetaWeinberg * (4./3. * Constants.thetaWeinberg - 1)
@@ -79,7 +79,7 @@ def GammaNC(U,mN,mf,Nz=1,fs="qup"):
         C2f = 1./6. * Constants.thetaWeinberg * (2./3. * Constants.thetaWeinberg - 1)
     else:
         return 0
-    
+
     x = mf/mN
     if (2*x>=1): return 0
     prefactor = Nz * Constants.FermiConstant**2 * mN**5 / (192*Constants.pi**3) * U**2
@@ -88,9 +88,9 @@ def GammaNC(U,mN,mf,Nz=1,fs="qup"):
     return prefactor * (C1f*factor1 + 4*C2f*factor2)
 
 def DeltaQCD(m_N,
-             nl=1,
+             nl=3,
              flavor_thresholds= np.array([1.5,4.8,173.21])):
-    
+
     nf = 3#int(3 + sum(m_N>flavor_thresholds))
     if nf<=4:
         # use tau mass for reference
@@ -100,7 +100,7 @@ def DeltaQCD(m_N,
         # use Z mass for reference
         m_ref = 91.1876
         alpha_s_ref = 0.1179
-    
+
     alpha_s = crd.AlphasExact(alpha_s_ref,m_ref,m_N,nf,nl)
     # from https://arxiv.org/abs/2007.03701
     return alpha_s / np.pi + 5.2 * alpha_s**2 / np.pi**2 + 26.4 * alpha_s**3 / np.pi**3
@@ -109,7 +109,7 @@ def GammaHadronsCC(m_N,m_l):
     Gamma_qq = 0
     for qu in ["u","c","t"]:
         for qd in ["d","s","b"]:
-            
+
             Gamma_qq += GammaCC(1,m_N,
                                 quark_masses[qu],
                                 quark_masses[qd],
@@ -131,13 +131,13 @@ def GammaHadronsNC(m_N):
 
 
 def get_decay_widths(m4, Ue4, Umu4, Utau4):
-    
+
     xs_path = siren.utilities.get_cross_section_model_path(f"DarkNewsTables-v{siren.utilities.darknews_version()}", must_exist=False)
     table_dir = os.path.join(
         xs_path,
-        "HNL_M%2.2e_e+%2.2e_mu%2.2e_tau%2.2e"%(m4,Ue4,Umu4,Utau4),
+        "HNL_M%2.3e_e+%2.2e_mu%2.2e_tau%2.2e"%(m4,Ue4,Umu4,Utau4),
     )
-    
+
     # Define a DarkNews model
     model_kwargs = {
         "m4": m4,
@@ -148,7 +148,7 @@ def get_decay_widths(m4, Ue4, Umu4, Utau4):
         "epsilon":0,
         "mzprime":1,
         "noHC": True,
-        "HNLtype": "dirac",
+        "HNLtype": "majorana",
         "include_nelastic": True,
         "nuclear_targets": ["H1"]
     }
@@ -164,23 +164,22 @@ def get_decay_widths(m4, Ue4, Umu4, Utau4):
         dielectron_decay = DN_processes.decays[0]
     else:
         dielectron_decay = None
-    two_body_decay = siren.interactions.HNLTwoBodyDecay(m4, [Ue4, Umu4, Utau4], siren.interactions.HNLTwoBodyDecay.ChiralNature.Dirac)
+    two_body_decay = siren.interactions.HNLTwoBodyDecay(m4, [Ue4, Umu4, Utau4], siren.interactions.HNLTwoBodyDecay.ChiralNature.Majorana)
     record = siren.dataclasses.InteractionRecord()
     record.signature.primary_type = siren.dataclasses.Particle.N4
     record.signature.target_type = siren.dataclasses.Particle.Decay
-    
+
     decay_widths = {}
-    
+
     for decay in [dimuon_decay,dielectron_decay,two_body_decay]:
         if decay is None: continue
         for signature in decay.GetPossibleSignaturesFromParent(siren.dataclasses.Particle.N4):
             record.signature.secondary_types = signature.secondary_types
             decay_widths[tuple(signature.secondary_types)] = decay.TotalDecayWidthForFinalState(record)
-    
+
     total_decay_width = 0
     for k,v in decay_widths.items():
-        if siren.dataclasses.Particle.Qball not in k:
-            total_decay_width += v
+        total_decay_width += v
     decay_widths["total"] = total_decay_width
-    
+
     return decay_widths
