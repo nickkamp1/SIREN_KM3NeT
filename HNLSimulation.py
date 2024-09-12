@@ -188,7 +188,7 @@ def RunDipoleHNLSimulation(events_to_inject,outfile,
         primary_physical_distributions = {}
 
         # energy distribution
-        edist = siren.distributions.PowerLaw(1, 1e1, 1.7e4)
+        edist = siren.distributions.PowerLaw(2, 1e1, 1.7e4)
         edist_phys = siren.distributions.TabulatedFluxDistribution(1e1,1e5,"daemonflux_numu.txt", True)
         primary_injection_distributions["energy"] = edist
         primary_physical_distributions["energy"] = edist_phys
