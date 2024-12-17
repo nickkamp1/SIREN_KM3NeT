@@ -2,6 +2,8 @@ from siren.SIREN_Controller import SIREN_Controller
 import siren
 import os
 
+
+# WARNING: this does not work yet
 def RunMinimalHNLSimulation(events_to_inject,outfile,
                             m4="1000",Ue4=0, Umu4=0, Utau4=1):
 
@@ -126,11 +128,11 @@ def RunMinimalHNLSimulation(events_to_inject,outfile,
 
 
 
-
+# This does work
 def RunDipoleHNLSimulation(events_to_inject,outfile,
                            m4,mu_tr_mu4):
 
-    # Define a DarkNews model
+        # Define a DarkNews model
         model_kwargs = {
             "m4": float(m4)*1e-3,
             "mu_tr_mu4": mu_tr_mu4, # GeV^-1
@@ -169,8 +171,8 @@ def RunDipoleHNLSimulation(events_to_inject,outfile,
         target_type = siren.dataclasses.Particle.ParticleType.Nucleon
 
         DIS_xs = siren.interactions.HNLDipoleDISFromSpline(
-            os.path.join(xsfiledir, "M_0000MeV/dsdxdy-nu-N-em-GRV98lo_patched_central.fits"),
-            os.path.join(xsfiledir, "M_%sMeV/sigma-nu-N-em-GRV98lo_patched_central.fits"%m4),
+            os.path.join(xsfiledir, "M_0000000MeV/dsdxdy-nu-N-em-GRV98lo_patched_central.fits"),
+            os.path.join(xsfiledir, "M_000%sMeV/sigma-nu-N-em-GRV98lo_patched_central.fits"%m4),
             model_kwargs["m4"],
             [0,model_kwargs["mu_tr_mu4"],0],
             [primary_type],
@@ -188,15 +190,14 @@ def RunDipoleHNLSimulation(events_to_inject,outfile,
         primary_physical_distributions = {}
 
         # energy distribution
-        edist = siren.distributions.PowerLaw(2, 1e1, 1.7e4)
-        edist_phys = siren.distributions.TabulatedFluxDistribution(1e1,1e5,"daemonflux_numu.txt", True)
+        edist = siren.distributions.PowerLaw(1, 1e1, 1.7e4)
         primary_injection_distributions["energy"] = edist
-        primary_physical_distributions["energy"] = edist_phys
 
         # direction distribution
         direction_distribution = siren.distributions.IsotropicDirection()
         primary_injection_distributions["direction"] = direction_distribution
-        primary_physical_distributions["direction"] = direction_distribution
+
+        primary_physical_distributions["energy_direction"] = siren.distributions.Tabulated2DFluxDistribution(1e1,1.7e4,"daemonflux_numu.txt",True)
 
         # position distribution
         position_distribution = controller.GetCylinderVolumePositionDistributionFromSector("orca")
